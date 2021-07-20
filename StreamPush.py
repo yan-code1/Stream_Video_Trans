@@ -1,4 +1,3 @@
-
 import cv2
 import queue
 import subprocess as sp
@@ -7,8 +6,9 @@ import os
 
 INPUT = 'http://ivi.bupt.edu.cn/hls/cctv6hd.m3u8'
 OUTPUT = 'rtmp://localhost:1935/live/test'
+SIZE = (640,480)
 class StreamPush():
-    def __init__(self,inputSourse = INPUT ,outputSource = OUTPUT):
+    def __init__(self,inputSourse = INPUT ,outputSource = OUTPUT ,sizeWanted = SIZE):
         # source config
         self.cap = cv2.VideoCapture(inputSourse)         # stream media source
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -17,7 +17,8 @@ class StreamPush():
         self.fourcc = cv2.VideoWriter_fourcc('M', 'P', '4', '2')
         self.outVideo = cv2.VideoWriter('./saveVideo.avi', self.fourcc, self.fps, (self.width, self.height))
         self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
-        # self.capReset(25,(640,480))
+        self.SCALE_FLAG = False
+        self.capReset(25,sizeWanted)
 
         # queue config
         self.max_size = 1
@@ -40,20 +41,21 @@ class StreamPush():
         self.outputSource]
         self.pipe = sp.Popen(self.command, stdin=sp.PIPE)  # init pipe
 
-    def capReset(self, FPS, SIZE):
+    def capReset(self, fps, size):
         # size
-        WIDTH, HEIGHT = SIZE
-        self.width = WIDTH
-        self.height = HEIGHT
-        self.fps = FPS
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT)
+        width, height = size
+        self.width = width
+        self.height = height
+        self.fps = fps
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+
         # FPS  default:600
-        self.cap.set(cv2.CAP_PROP_FPS, FPS)
+        self.cap.set(cv2.CAP_PROP_FPS, fps)
 
         # solve delay problem
         self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
-
+        self.SCALE_FLAG = True
     def isMediaRead(self):
         if self.cap.isOpened():
             print('get stream media successfully')
@@ -76,7 +78,6 @@ class StreamPush():
         print('saved')
 
     def image_sample(self):
-        # 抽帧压入q队列
         while True:
             self.frameQueue.put(self.cap.read()[1])
             if self.frameQueue.qsize() > self.max_size:
@@ -88,7 +89,9 @@ class StreamPush():
                 frame = self.frameQueue.get()
                 # image deal
                 # frame = cv2.putText(frame, 'sent rtmp frame', (500, 500), cv2.FONT_HERSHEY_SIMPLEX, 3.0, (255, 255, 255), 5)
-                # frame = cv2.resize(frame, (640, 480), fx=0.25, fy=0.25, interpolation=cv2.INTER_NEAREST)
+                if self.SCALE_FLAG:
+                    frame = cv2.resize(frame, (640, 480))
+                    # frame = cv2.resize(frame, (640, 480), fx=0.25, fy=0.25, interpolation=cv2.INTER_NEAREST)
                 self.pipe.stdin.write(frame.tostring())
 
                 # cv2.imshow("frame", frame)
@@ -108,5 +111,5 @@ class StreamPush():
         else:
             print("resource error!")
 
-#streamPush = StreamPush()
-#streamPush.pushStart()
+streamPush = StreamPush()
+streamPush.pushStart()
